@@ -23,6 +23,7 @@ export async function apiFetch<T>(
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     headers,
+    credentials: "include",
     cache: "no-store",
   });
 

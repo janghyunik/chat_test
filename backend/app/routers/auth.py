@@ -1,18 +1,23 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from app.core.auth import SessionUser, get_current_token, get_current_user, session_manager
 from app.core.config import settings
+from app.core.visitor import get_or_create_visitor_id, set_visitor_cookie
 from app.schemas.auth import LoginRequest, LoginResponse
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 @router.post("/login", response_model=LoginResponse)
-def login(payload: LoginRequest):
+def login(payload: LoginRequest, request: Request, response: Response):
     if payload.username != settings.admin_username or payload.password != settings.admin_password:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
 
     token = session_manager.create(username=settings.admin_username, email=settings.admin_email)
+
+    visitor_id, _ = get_or_create_visitor_id(request)
+    set_visitor_cookie(response, visitor_id)
+
     return LoginResponse(access_token=token, username=settings.admin_username, email=settings.admin_email)
 
 

@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request, Response
 
 from app.core.auth import SessionUser, get_current_user
+from app.core.visitor import get_or_create_visitor_id, set_visitor_cookie
 from app.schemas.chat import (
     CreateChatSessionRequest,
     DeleteChatSessionResponse,
@@ -18,28 +19,72 @@ from app.services.chat_service import (
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
+def _build_owner_id(username: str, visitor_id: str) -> str:
+    return f"{username}:{visitor_id}"
+
+
 @router.get("/sessions")
-def get_sessions(current_user: SessionUser = Depends(get_current_user)):
-    return list_sessions(current_user.username)
+def get_sessions(
+    request: Request,
+    response: Response,
+    current_user: SessionUser = Depends(get_current_user),
+):
+    visitor_id, _ = get_or_create_visitor_id(request)
+    set_visitor_cookie(response, visitor_id)
+    owner_id = _build_owner_id(current_user.username, visitor_id)
+    return list_sessions(owner_id)
 
 
 @router.post("/sessions")
-def post_session(payload: CreateChatSessionRequest, current_user: SessionUser = Depends(get_current_user)):
-    return create_session(current_user.username, title=payload.title, process=payload.process)
+def post_session(
+    payload: CreateChatSessionRequest,
+    request: Request,
+    response: Response,
+    current_user: SessionUser = Depends(get_current_user),
+):
+    visitor_id, _ = get_or_create_visitor_id(request)
+    set_visitor_cookie(response, visitor_id)
+    owner_id = _build_owner_id(current_user.username, visitor_id)
+    return create_session(owner_id, title=payload.title, process=payload.process)
 
 
 @router.get("/sessions/{session_id}")
-def get_single_session(session_id: str, current_user: SessionUser = Depends(get_current_user)):
-    return get_session(current_user.username, session_id)
+def get_single_session(
+    session_id: str,
+    request: Request,
+    response: Response,
+    current_user: SessionUser = Depends(get_current_user),
+):
+    visitor_id, _ = get_or_create_visitor_id(request)
+    set_visitor_cookie(response, visitor_id)
+    owner_id = _build_owner_id(current_user.username, visitor_id)
+    return get_session(owner_id, session_id)
 
 
 @router.delete("/sessions/{session_id}", response_model=DeleteChatSessionResponse)
-def remove_session(session_id: str, current_user: SessionUser = Depends(get_current_user)):
-    delete_session(current_user.username, session_id)
+def remove_session(
+    session_id: str,
+    request: Request,
+    response: Response,
+    current_user: SessionUser = Depends(get_current_user),
+):
+    visitor_id, _ = get_or_create_visitor_id(request)
+    set_visitor_cookie(response, visitor_id)
+    owner_id = _build_owner_id(current_user.username, visitor_id)
+    delete_session(owner_id, session_id)
     return DeleteChatSessionResponse(session_id=session_id)
 
 
 @router.post("/sessions/{session_id}/messages", response_model=SendMessageResponse)
-def post_message(session_id: str, payload: SendMessageRequest, current_user: SessionUser = Depends(get_current_user)):
-    session, answer = send_user_message(current_user.username, session_id, payload.content)
+def post_message(
+    session_id: str,
+    payload: SendMessageRequest,
+    request: Request,
+    response: Response,
+    current_user: SessionUser = Depends(get_current_user),
+):
+    visitor_id, _ = get_or_create_visitor_id(request)
+    set_visitor_cookie(response, visitor_id)
+    owner_id = _build_owner_id(current_user.username, visitor_id)
+    session, answer = send_user_message(owner_id, session_id, payload.content)
     return SendMessageResponse(session=session, answer=answer)
