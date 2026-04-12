@@ -1,0 +1,144 @@
+{
+  "users": {
+    "admin": [
+      {
+        "id": "c0d90efc514c42d199132f823da1a3df",
+        "title": "새 채팅",
+        "created_at": "2026-04-12T07:52:52.866857+00:00",
+        "updated_at": "2026-04-12T07:52:52.866857+00:00",
+        "process": "MP",
+        "messages": [],
+        "agentic_state": {}
+      },
+      {
+        "id": "281940ba038a48da87b52a31558b320d",
+        "title": "새 채팅",
+        "created_at": "2026-04-12T07:52:52.909853+00:00",
+        "updated_at": "2026-04-12T07:52:52.909853+00:00",
+        "process": "MP",
+        "messages": [],
+        "agentic_state": {}
+      },
+      {
+        "id": "c9f99970bdae4ceb8066056a60517c4a",
+        "title": "새 채팅",
+        "created_at": "2026-04-12T07:52:58.066364+00:00",
+        "updated_at": "2026-04-12T07:52:58.066364+00:00",
+        "process": "MP",
+        "messages": [],
+        "agentic_state": {}
+      },
+      {
+        "id": "3fafa919f39d43e0850f090955460592",
+        "title": "새 채팅",
+        "created_at": "2026-04-12T07:52:58.078364+00:00",
+        "updated_at": "2026-04-12T07:52:58.078364+00:00",
+        "process": "MP",
+        "messages": [],
+        "agentic_state": {}
+      },
+      {
+        "id": "45d2af46ef9745f7bb10861641c39cd0",
+        "title": "새 채팅",
+        "created_at": "2026-04-12T07:57:21.164999+00:00",
+        "updated_at": "2026-04-12T07:57:21.164999+00:00",
+        "process": "MP",
+        "messages": [],
+        "agentic_state": {}
+      },
+      {
+        "id": "3d348fa4200143b8ba2428719ff243b7",
+        "title": "반도체가 뭐야?",
+        "created_at": "2026-04-12T07:57:21.179998+00:00",
+        "updated_at": "2026-04-12T08:01:14.313245+00:00",
+        "process": "MP",
+        "messages": [
+          {
+            "id": "910f771142a443459ae69c2b4461c7e2",
+            "role": "user",
+            "content": "반도체가 뭐야?",
+            "created_at": "2026-04-12T07:57:32.324977+00:00"
+          },
+          {
+            "id": "481b0cf67ef1432abfaafb597bfa06de",
+            "role": "assistant",
+            "content": "죄송합니다. 답변 중 오류가 발생했습니다.",
+            "created_at": "2026-04-12T07:57:36.408437+00:00"
+          },
+          {
+            "id": "78e80238de45409fb8c38e33b3cd458d",
+            "role": "user",
+            "content": "반도체가 뭐야?",
+            "created_at": "2026-04-12T08:01:10.239370+00:00"
+          },
+          {
+            "id": "c3c70cb84f534004ac8dafbc3fbf51cd",
+            "role": "assistant",
+            "content": "죄송합니다. 답변 중 오류가 발생했습니다.",
+            "created_at": "2026-04-12T08:01:14.313245+00:00"
+          }
+        ],
+        "agentic_state": {
+          "user_question": "반도체가 뭐야?",
+          "current_step": "end",
+          "mode": "general",
+          "metadata": {},
+          "meta_confirmed": null,
+          "user_message": "반도체가 뭐야?",
+          "docs": [],
+          "selected_doc": null,
+          "llm_prompt": "",
+          "llm_response": "죄송합니다. 답변 중 오류가 발생했습니다.",
+          "process": "MP",
+          "retry_count": 0,
+          "next_step": null
+        }
+      },
+      {
+        "id": "1e3301f949e04d09a751587464c5e958",
+        "title": "새 채팅",
+        "created_at": "2026-04-12T08:02:44.010810+00:00",
+        "updated_at": "2026-04-12T08:02:44.010810+00:00",
+        "process": "MP",
+        "messages": [],
+        "agentic_state": {}
+      },
+      {
+        "id": "e0378fb1d82a46ca8b8a20e7e86ccb63",
+        "title": "오늘 날씨는?",
+        "created_at": "2026-04-12T08:02:44.021815+00:00",
+        "updated_at": "2026-04-12T08:03:15.285173+00:00",
+        "process": "MP",
+        "messages": [
+          {
+            "id": "f0bf080c08514821b1228a4246910aa7",
+            "role": "user",
+            "content": "오늘 날씨는?",
+            "created_at": "2026-04-12T08:02:50.530606+00:00"
+          },
+          {
+            "id": "b723792e87b843fd8dc9be034f255df8",
+            "role": "assistant",
+            "content": "현재 서울의 날씨는 맑고, 기온은 25도입니다. 습도는 40%이며, 미세먼지 농도는 보통 수준입니다.",
+            "created_at": "2026-04-12T08:03:15.285173+00:00"
+          }
+        ],
+        "agentic_state": {
+          "user_question": "오늘 날씨는?",
+          "current_step": "end",
+          "mode": "general",
+          "metadata": {},
+          "meta_confirmed": null,
+          "user_message": "오늘 날씨는?",
+          "docs": [],
+          "selected_doc": null,
+          "llm_prompt": "",
+          "llm_response": "현재 서울의 날씨는 맑고, 기온은 25도입니다. 습도는 40%이며, 미세먼지 농도는 보통 수준입니다.",
+          "process": "MP",
+          "retry_count": 0,
+          "next_step": null
+        }
+      }
+    ]
+  }
+}
