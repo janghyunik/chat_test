@@ -1,8 +1,19 @@
 from fastapi import APIRouter, Depends
 
 from app.core.auth import SessionUser, get_current_user
-from app.schemas.chat import CreateChatSessionRequest, SendMessageRequest, SendMessageResponse
-from app.services.chat_service import create_session, get_session, list_sessions, send_user_message
+from app.schemas.chat import (
+    CreateChatSessionRequest,
+    DeleteChatSessionResponse,
+    SendMessageRequest,
+    SendMessageResponse,
+)
+from app.services.chat_service import (
+    create_session,
+    delete_session,
+    get_session,
+    list_sessions,
+    send_user_message,
+)
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -20,6 +31,12 @@ def post_session(payload: CreateChatSessionRequest, current_user: SessionUser = 
 @router.get("/sessions/{session_id}")
 def get_single_session(session_id: str, current_user: SessionUser = Depends(get_current_user)):
     return get_session(current_user.username, session_id)
+
+
+@router.delete("/sessions/{session_id}", response_model=DeleteChatSessionResponse)
+def remove_session(session_id: str, current_user: SessionUser = Depends(get_current_user)):
+    delete_session(current_user.username, session_id)
+    return DeleteChatSessionResponse(session_id=session_id)
 
 
 @router.post("/sessions/{session_id}/messages", response_model=SendMessageResponse)

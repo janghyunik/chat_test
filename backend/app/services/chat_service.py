@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -59,6 +59,17 @@ def create_session(username: str, title: str | None = None, process: str = "MP")
     store["users"][username].append(session)
     _save_store(store)
     return session
+
+
+def delete_session(username: str, session_id: str) -> None:
+    store = _load_store()
+    sessions = store["users"].get(username, [])
+    filtered = [session for session in sessions if session["id"] != session_id]
+    if len(filtered) == len(sessions):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="채팅 세션을 찾을 수 없습니다.")
+
+    store["users"][username] = filtered
+    _save_store(store)
 
 
 def get_session(username: str, session_id: str) -> dict[str, Any]:

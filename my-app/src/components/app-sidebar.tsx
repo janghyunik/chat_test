@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { apiFetch, clearAuthToken } from "@/lib/api";
 
@@ -17,6 +17,8 @@ type Props = {
   onCreateChat?: () => Promise<void> | void;
 };
 
+const CHAT_SESSION_EVENT = "chat-sessions-changed";
+
 export function AppSidebar({ onCreateChat }: Props) {
   const pathname = usePathname();
   const router = useRouter();
@@ -24,6 +26,21 @@ export function AppSidebar({ onCreateChat }: Props) {
   const activeChatId = searchParams.get("chat");
   const [sessions, setSessions] = useState<ChatSessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const chatHref = useMemo(() => {
+    if (activeChatId) {
+      return `/?chat=${activeChatId}`;
+    }
+    return "/";
+  }, [activeChatId]);
+
+  const informHref = useMemo(() => {
+    if (activeChatId) {
+      return `/inform?chat=${activeChatId}`;
+    }
+    return "/inform";
+  }, [activeChatId]);
 
   async function loadSessions() {
     try {
@@ -37,7 +54,25 @@ export function AppSidebar({ onCreateChat }: Props) {
   }
 
   useEffect(() => {
-    loadSessions();
+    let cancelled = false;
+
+    async function run() {
+      if (!cancelled) {
+        await loadSessions();
+      }
+    }
+
+    run();
+
+    function handleChanged() {
+      void run();
+    }
+
+    window.addEventListener(CHAT_SESSION_EVENT, handleChanged);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(CHAT_SESSION_EVENT, handleChanged);
+    };
   }, [pathname]);
 
   async function handleLogout() {
@@ -50,16 +85,40 @@ export function AppSidebar({ onCreateChat }: Props) {
     router.replace("/login");
   }
 
+  async function handleDeleteChat(sessionId: string) {
+    const approved = window.confirm("이 채팅을 삭제하시겠습니까?");
+    if (!approved) return;
+
+    setDeletingId(sessionId);
+    try {
+      await apiFetch(`/api/chat/sessions/${sessionId}`, { method: "DELETE" });
+      window.dispatchEvent(new Event(CHAT_SESSION_EVENT));
+      if (activeChatId === sessionId && pathname === "/") {
+        router.replace("/");
+      }
+      if (activeChatId === sessionId && pathname === "/inform") {
+        router.replace("/inform");
+      }
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "채팅 삭제에 실패했습니다.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <aside className="app-sidebar">
+      <div className="sidebar-brand">chat_test</div>
+
       <div className="sidebar-top">
         <button
-          className="primary-button"
+          className="new-chat-button"
           type="button"
           onClick={async () => {
             if (onCreateChat) {
               await onCreateChat();
               await loadSessions();
+              window.dispatchEvent(new Event(CHAT_SESSION_EVENT));
             } else {
               router.push("/");
             }
@@ -69,13 +128,10 @@ export function AppSidebar({ onCreateChat }: Props) {
         </button>
 
         <nav className="sidebar-nav">
-          <Link className={pathname === "/" ? "nav-link active" : "nav-link"} href="/">
+          <Link className={pathname === "/" ? "nav-link active" : "nav-link"} href={chatHref}>
             채팅
           </Link>
-          <Link
-            className={pathname === "/inform" ? "nav-link active" : "nav-link"}
-            href="/inform"
-          >
+          <Link className={pathname === "/inform" ? "nav-link active" : "nav-link"} href={informHref}>
             인폼노트 DB
           </Link>
         </nav>
@@ -88,21 +144,31 @@ export function AppSidebar({ onCreateChat }: Props) {
 
         <div className="history-list">
           {sessions.map((session) => (
-            <Link
+            <div
               key={session.id}
               className={activeChatId === session.id ? "history-item active" : "history-item"}
-              href={`/?chat=${session.id}`}
             >
-              <span className="history-title">{session.title}</span>
-              <span className="history-time">
-                {new Date(session.updated_at).toLocaleString("ko-KR", {
-                  month: "2-digit",
-                  day: "2-digit",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
-            </Link>
+              <Link className="history-link" href={`/?chat=${session.id}`}>
+                <span className="history-title">{session.title}</span>
+                <span className="history-time">
+                  {new Date(session.updated_at).toLocaleString("ko-KR", {
+                    month: "2-digit",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+              </Link>
+              <button
+                aria-label="채팅 삭제"
+                className="history-delete"
+                disabled={deletingId === session.id}
+                type="button"
+                onClick={() => handleDeleteChat(session.id)}
+              >
+                {deletingId === session.id ? "..." : "×"}
+              </button>
+            </div>
           ))}
         </div>
       </div>

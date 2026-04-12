@@ -30,6 +30,11 @@ class CreateChatSessionRequest(BaseModel):
     process: str = "MP"
 
 
+class DeleteChatSessionResponse(BaseModel):
+    deleted: bool = True
+    session_id: str
+
+
 class SendMessageRequest(BaseModel):
     content: str
 

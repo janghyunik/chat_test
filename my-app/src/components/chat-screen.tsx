@@ -22,6 +22,8 @@ type ChatSession = {
   messages: ChatMessage[];
 };
 
+const CHAT_SESSION_EVENT = "chat-sessions-changed";
+
 export function ChatScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -40,6 +42,7 @@ export function ChatScreen() {
       method: "POST",
       body: JSON.stringify({ process: "MP" }),
     });
+    window.dispatchEvent(new Event(CHAT_SESSION_EVENT));
     router.replace(`/?chat=${created.id}`);
   }
 
@@ -50,6 +53,7 @@ export function ChatScreen() {
       const data = await apiFetch<ChatSession>(`/api/chat/sessions/${targetId}`);
       setSession(data);
     } catch (loadError) {
+      setSession(null);
       setError(loadError instanceof Error ? loadError.message : "채팅을 불러오지 못했습니다.");
     } finally {
       setLoading(false);
@@ -58,10 +62,12 @@ export function ChatScreen() {
 
   useEffect(() => {
     if (!chatId) {
-      createChatAndMove();
+      setSession(null);
+      setLoading(false);
+      setError(null);
       return;
     }
-    loadSession(chatId);
+    void loadSession(chatId);
   }, [chatId]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -82,6 +88,7 @@ export function ChatScreen() {
         },
       );
       setSession(data.session);
+      window.dispatchEvent(new Event(CHAT_SESSION_EVENT));
     } catch (sendError) {
       setError(sendError instanceof Error ? sendError.message : "질문 전송에 실패했습니다.");
       setInput(content);
@@ -95,32 +102,33 @@ export function ChatScreen() {
       <AppSidebar onCreateChat={createChatAndMove} />
 
       <main className="main-panel chat-panel">
-        {loading ? (
-          <div className="empty-state">
-            <p className="muted-text">채팅을 준비하는 중입니다...</p>
-          </div>
-        ) : null}
+        <div className="chat-scroll-area">
+          {loading ? (
+            <div className="empty-state">
+              <p className="muted-text">채팅을 준비하는 중입니다...</p>
+            </div>
+          ) : null}
 
-        {!loading && error ? (
-          <div className="empty-state">
-            <p className="error-text">{error}</p>
-          </div>
-        ) : null}
+          {!loading && error ? (
+            <div className="empty-state">
+              <p className="error-text">{error}</p>
+            </div>
+          ) : null}
 
-        {!loading && !error && session ? (
-          <>
-            <div className="chat-scroll-area">
+          {!loading && !error ? (
+            <div className="chat-scroll-inner">
               {isEmpty ? (
                 <section className="welcome-card">
                   <p className="welcome-label">CHAT TEST</p>
                   <h1>무엇을 도와드릴까요?</h1>
                   <p className="muted-text">
-                    Django 기반 화면은 제거하고, ChatGPT 스타일의 메인 채팅 화면만 남긴 1차 전환본입니다.
+                    왼쪽의 새 채팅 버튼을 눌러 새로운 대화를 시작하세요. 기존 채팅은 사이드바에서
+                    다시 이어서 볼 수 있습니다.
                   </p>
                 </section>
               ) : null}
 
-              {session.messages.map((message) => (
+              {session?.messages.map((message) => (
                 <article
                   key={message.id}
                   className={message.role === "user" ? "message-row user" : "message-row assistant"}
@@ -132,24 +140,31 @@ export function ChatScreen() {
                 </article>
               ))}
             </div>
+          ) : null}
+        </div>
 
-            <form className="composer" onSubmit={handleSubmit}>
-              <textarea
-                className="composer-input"
-                rows={4}
-                placeholder="반도체 설비 에러, 점검 이력, 일반 질문 등을 입력하세요. 번호 선택 단계에서는 숫자만 입력해도 됩니다."
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-              />
-              <div className="composer-bottom">
-                <span className="muted-text small">공정 기본값: MP</span>
-                <button className="primary-button" disabled={sending} type="submit">
-                  {sending ? "전송 중..." : "질문 보내기"}
-                </button>
-              </div>
-            </form>
-          </>
-        ) : null}
+        <form className="composer" onSubmit={handleSubmit}>
+          <div className="composer-inner">
+            <textarea
+              className="composer-input"
+              disabled={!chatId}
+              rows={4}
+              placeholder={
+                chatId
+                  ? "반도체 설비 에러, 점검 이력, 일반 질문 등을 입력하세요. 번호 선택 단계에서는 숫자만 입력해도 됩니다."
+                  : "왼쪽의 새 채팅 버튼을 눌러 대화를 시작하세요."
+              }
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+            />
+            <div className="composer-bottom">
+              <span className="muted-text small">공정 기본값: MP</span>
+              <button className="primary-button" disabled={sending || !chatId} type="submit">
+                {sending ? "전송 중..." : "질문 보내기"}
+              </button>
+            </div>
+          </div>
+        </form>
       </main>
     </div>
   );
