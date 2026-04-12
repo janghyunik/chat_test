@@ -29,21 +29,37 @@ export function InformScreen() {
   const [process, setProcess] = useState("MP");
   const [line, setLine] = useState("");
   const [equip, setEquip] = useState("");
+  const [keyword, setKeyword] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [records, setRecords] = useState<InformRecord[]>([]);
   const [options, setOptions] = useState<{ 라인?: string[]; 설비명?: string[] }>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  async function loadRecords(params?: { process?: string; line?: string; equip?: string }) {
+  async function loadRecords(params?: {
+    process?: string;
+    line?: string;
+    equip?: string;
+    keyword?: string;
+    startDate?: string;
+    endDate?: string;
+  }) {
     setLoading(true);
     setError(null);
     const currentProcess = params?.process ?? process;
     const currentLine = params?.line ?? line;
     const currentEquip = params?.equip ?? equip;
+    const currentKeyword = params?.keyword ?? keyword;
+    const currentStartDate = params?.startDate ?? startDate;
+    const currentEndDate = params?.endDate ?? endDate;
 
     const search = new URLSearchParams({ process: currentProcess });
     if (currentLine) search.set("line", currentLine);
     if (currentEquip) search.set("equip", currentEquip);
+    if (currentKeyword.trim()) search.set("keyword", currentKeyword.trim());
+    if (currentStartDate) search.set("start", currentStartDate);
+    if (currentEndDate) search.set("end", currentEndDate);
 
     try {
       const data = await apiFetch<InformResponse>(`/api/inform/records?${search.toString()}`);
@@ -74,7 +90,7 @@ export function InformScreen() {
         </header>
 
         <section className="filter-card">
-          <div className="filter-grid">
+          <div className="filter-grid inform-filter-grid">
             <label>
               <span>공정</span>
               <select value={process} onChange={(event) => setProcess(event.target.value)}>
@@ -107,13 +123,33 @@ export function InformScreen() {
                 ))}
               </select>
             </label>
+
+            <label>
+              <span>키워드 검색</span>
+              <input
+                placeholder="설비명, 에러명, 점검이력 키워드 입력"
+                type="text"
+                value={keyword}
+                onChange={(event) => setKeyword(event.target.value)}
+              />
+            </label>
+
+            <label>
+              <span>시작일</span>
+              <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+            </label>
+
+            <label>
+              <span>종료일</span>
+              <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+            </label>
           </div>
 
           <div className="filter-actions">
             <button
               className="primary-button"
               type="button"
-              onClick={() => loadRecords({ process, line, equip })}
+              onClick={() => loadRecords({ process, line, equip, keyword, startDate, endDate })}
             >
               조회
             </button>
@@ -124,7 +160,10 @@ export function InformScreen() {
                 setProcess("MP");
                 setLine("");
                 setEquip("");
-                loadRecords({ process: "MP", line: "", equip: "" });
+                setKeyword("");
+                setStartDate("");
+                setEndDate("");
+                loadRecords({ process: "MP", line: "", equip: "", keyword: "", startDate: "", endDate: "" });
               }}
             >
               초기화

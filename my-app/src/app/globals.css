@@ -361,7 +361,8 @@ button {
 
 .composer-input,
 .login-form input,
-.filter-grid select {
+.filter-grid select,
+.filter-grid input {
   width: 100%;
   border: 1px solid var(--line);
   background: var(--surface-soft);
@@ -373,7 +374,8 @@ button {
 
 .composer-input:focus,
 .login-form input:focus,
-.filter-grid select:focus {
+.filter-grid select:focus,
+.filter-grid input:focus {
   border-color: var(--line-strong);
   box-shadow: 0 0 0 3px rgba(17, 17, 17, 0.04);
 }
@@ -473,6 +475,10 @@ button {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
+}
+
+.inform-filter-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .filter-grid label,

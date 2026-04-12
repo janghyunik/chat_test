@@ -40,6 +40,7 @@ def get_inform_records(
     process: str,
     line: str = "",
     equip: str = "",
+    keyword: str = "",
     period: str = "",
     start: str = "",
     end: str = "",
@@ -71,6 +72,19 @@ def get_inform_records(
         filtered = [row for row in filtered if str(row.get("라인", "")) == line]
     if equip and equip != "전체":
         filtered = [row for row in filtered if str(row.get("설비명", "")) == equip]
+
+    keyword_norm = keyword.strip().lower()
+    if keyword_norm:
+        def matches_keyword(row: dict[str, Any]) -> bool:
+            haystack = " ".join([
+                str(row.get("라인", "")),
+                str(row.get("설비명", "")),
+                str(row.get("에러명", "")),
+                str(row.get("점검이력", "")),
+            ]).lower()
+            return keyword_norm in haystack
+
+        filtered = [row for row in filtered if matches_keyword(row)]
 
     if period:
         filtered = _filter_by_date(filtered, period)

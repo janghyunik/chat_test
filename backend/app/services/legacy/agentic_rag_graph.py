@@ -2,6 +2,7 @@ import os
 import re
 import json
 from typing import TypedDict, List, Optional
+from datetime import datetime
 from dotenv import load_dotenv
 from langgraph.graph import StateGraph, END
 from langchain_community.chat_models.ollama import ChatOllama
@@ -17,6 +18,7 @@ LLM_MODEL = os.getenv("LLM_MODEL")
 
 # 1차 검색 후보 수
 TOP_K = 10
+RERANK_TOP_K = 5
 # 2차 검색에서 컨텍스트로 사용할 문서 수(선택 문서 포함)
 CONTEXT_USE_N = 5
 # 2차 검색에서 벡터DB에서 가져올 후보 수(버킷/중복 제거 후 5건을 안정적으로 확보하려면 여유 있게)
@@ -77,6 +79,113 @@ def _dedup_preserve_order(docs: List[dict]) -> List[dict]:
         seen.add(k)
         out.append(d)
     return out
+
+
+
+STOPWORDS = {
+    "이력", "오류", "에러", "알람", "점검", "정검", "조치", "문제", "발생", "현상",
+    "관련", "내용", "알려줘", "알려주세요", "무엇", "뭐야", "조회", "정리", "확인",
+    "호기", "설비", "장비", "라인", "please", "what", "show"
+}
+
+def _tokenize(text: str) -> List[str]:
+    return [tok for tok in re.findall(r"[0-9A-Za-z가-힣]+", str(text or "").lower()) if tok]
+
+def _keyword_tokens(question: str) -> List[str]:
+    tokens = []
+    for tok in _tokenize(question):
+        if tok in STOPWORDS:
+            continue
+        if len(tok) >= 2 or tok.isdigit():
+            tokens.append(tok)
+    seen = set()
+    ordered = []
+    for tok in tokens:
+        if tok not in seen:
+            seen.add(tok)
+            ordered.append(tok)
+    return ordered
+
+def _safe_date(doc: dict) -> Optional[datetime]:
+    raw = str(doc.get("날짜", "")).strip()
+    if not raw:
+        return None
+    for candidate in (raw, raw[:19], raw[:10]):
+        for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S.%f"):
+            try:
+                return datetime.strptime(candidate, fmt)
+            except Exception:
+                continue
+    try:
+        return datetime.fromisoformat(raw.replace('Z', '+00:00'))
+    except Exception:
+        return None
+
+def _normalize_similarity(similarity: float, min_sim: float, max_sim: float) -> float:
+    if max_sim - min_sim < 1e-9:
+        return 1.0
+    # pgvector <=> 는 작을수록 더 유사함
+    return 1.0 - ((similarity - min_sim) / (max_sim - min_sim))
+
+def _field_match_score(question_norm: str, keywords: List[str], field_value: str, exact_weight: float, token_weight: float, cap: float) -> float:
+    field_norm = _norm(field_value)
+    if not field_norm:
+        return 0.0
+    score = 0.0
+    if field_norm and field_norm in question_norm:
+        score += exact_weight
+    matched = sum(1 for tok in keywords if tok in field_norm)
+    score += min(cap, matched * token_weight)
+    return score
+
+def _rerank_candidates(question: str, candidates: List[dict]) -> List[dict]:
+    if not candidates:
+        return []
+
+    question_norm = _norm(question)
+    keywords = _keyword_tokens(question)
+    sims = [float(doc.get("similarity", 9999.0) or 9999.0) for doc in candidates]
+    min_sim = min(sims)
+    max_sim = max(sims)
+
+    dates = [d for d in (_safe_date(doc) for doc in candidates) if d is not None]
+    newest = max(dates) if dates else None
+    oldest = min(dates) if dates else None
+    date_span = max((newest - oldest).days, 1) if newest and oldest else 1
+
+    reranked = []
+    for doc in candidates:
+        vector_score = _normalize_similarity(float(doc.get("similarity", 9999.0) or 9999.0), min_sim, max_sim) * 4.0
+        equip_score = _field_match_score(question_norm, keywords, str(doc.get("설비명", "")), exact_weight=2.4, token_weight=0.7, cap=1.8)
+        error_score = _field_match_score(question_norm, keywords, str(doc.get("에러명", "")), exact_weight=3.0, token_weight=0.8, cap=2.4)
+        line_score = _field_match_score(question_norm, keywords, str(doc.get("라인", "")), exact_weight=0.8, token_weight=0.5, cap=0.8)
+        history_score = _field_match_score(question_norm, keywords, str(doc.get("점검이력", "")), exact_weight=0.0, token_weight=0.22, cap=1.6)
+
+        date_score = 0.0
+        doc_date = _safe_date(doc)
+        if newest and doc_date:
+            recency = 1.0 - ((newest - doc_date).days / date_span)
+            date_score = max(0.0, recency) * 0.9
+
+        total_score = vector_score + equip_score + error_score + line_score + history_score + date_score
+        debug = {
+            "vector": round(vector_score, 3),
+            "equip": round(equip_score, 3),
+            "error": round(error_score, 3),
+            "line": round(line_score, 3),
+            "history": round(history_score, 3),
+            "date": round(date_score, 3),
+            "total": round(total_score, 3),
+        }
+        doc_copy = dict(doc)
+        doc_copy["rerank"] = debug
+        reranked.append(doc_copy)
+
+    reranked.sort(key=lambda item: item.get("rerank", {}).get("total", 0.0), reverse=True)
+    print(f"[RERANK] keywords={keywords}")
+    for idx, doc in enumerate(reranked, 1):
+        print(f"  #{idx} total={doc['rerank']['total']} sim={doc.get('similarity')} | {_doc_line(doc)} | details={doc['rerank']}")
+    return reranked
 
 # ==================== 고급 트러블슈팅 프롬프트 ====================
 ENHANCED_TROUBLESHOOT_PROMPT = PromptTemplate(
@@ -365,8 +474,8 @@ def generate_final_answer(state: AgenticChatState) -> AgenticChatState:
 
 def retrieve_and_answer_direct(state: AgenticChatState) -> AgenticChatState:
     """
-    기존의 1차 표 제시 → 번호 선택 흐름을 생략하고,
-    질문과 가장 유사한 상위 문서를 자동 선택(top-1)한 뒤 바로 2차 RAG 답변을 생성합니다.
+    질문 즉시 top-k 후보를 가져온 뒤,
+    설비명/에러명/키워드/날짜/유사도를 합산해 내부 재랭킹하고 최종 1개를 선택합니다.
     """
     print("\n[STEP] retrieve_and_answer_direct")
     question = state.get("user_question", "")
@@ -376,7 +485,7 @@ def retrieve_and_answer_direct(state: AgenticChatState) -> AgenticChatState:
         candidates = search_similar_documents(
             user_query=question,
             process=process,
-            top_k=TOP_K,
+            top_k=RERANK_TOP_K,
         )
     except Exception as e:
         state["llm_response"] = f"❌ retrieval 오류: {e}"
@@ -388,8 +497,10 @@ def retrieve_and_answer_direct(state: AgenticChatState) -> AgenticChatState:
         state["current_step"] = "end"
         return state
 
-    state["docs"] = _dedup_preserve_order(candidates[:TOP_K])
-    state["selected_doc"] = state["docs"][0]
+    deduped = _dedup_preserve_order(candidates)
+    reranked = _rerank_candidates(question, deduped)
+    state["docs"] = reranked
+    state["selected_doc"] = reranked[0]
     state["current_step"] = "generate_final_answer"
     return generate_final_answer(state)
 

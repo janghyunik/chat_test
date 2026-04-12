@@ -12,10 +12,19 @@ def read_inform_records(
     process: str = Query(default="MP"),
     line: str = Query(default=""),
     equip: str = Query(default=""),
+    keyword: str = Query(default=""),
     period: str = Query(default=""),
     start: str = Query(default=""),
     end: str = Query(default=""),
     current_user: SessionUser = Depends(get_current_user),
 ):
     _ = current_user
-    return get_inform_records(process=process, line=line, equip=equip, period=period, start=start, end=end)
+    return get_inform_records(
+        process=process,
+        line=line,
+        equip=equip,
+        keyword=keyword,
+        period=period,
+        start=start,
+        end=end,
+    )
