@@ -51,12 +51,39 @@
       },
       {
         "id": "068f7daee3a14d8798c82cd55c7a5d66",
-        "title": "새 채팅",
+        "title": "영어 표현 5개만 알려줘",
         "created_at": "2026-04-12T08:58:20.786909+00:00",
-        "updated_at": "2026-04-12T08:58:20.786909+00:00",
+        "updated_at": "2026-04-12T09:15:13.869877+00:00",
         "process": "MP",
-        "messages": [],
-        "agentic_state": {}
+        "messages": [
+          {
+            "id": "4896b763bcdb40118520001ff99325d6",
+            "role": "user",
+            "content": "영어 표현 5개만 알려줘",
+            "created_at": "2026-04-12T09:14:53.988550+00:00"
+          },
+          {
+            "id": "b2a4068a78384327ac40e570750ce646",
+            "role": "assistant",
+            "content": "1.  **Let's get this over with.** (빨리 끝내자)\n2.  **No pain, no gain.** (고통 없이 얻는 것은 없다)\n3.  **Break a leg!** (행운을 빌어!)\n4.  **Once in a blue moon.** (아주 드물게)\n5.  **Hit the nail on the head.** (정타를 맞추다)",
+            "created_at": "2026-04-12T09:15:13.869877+00:00"
+          }
+        ],
+        "agentic_state": {
+          "user_question": "영어 표현 5개만 알려줘",
+          "current_step": "end",
+          "mode": "general",
+          "metadata": {},
+          "meta_confirmed": null,
+          "user_message": "영어 표현 5개만 알려줘",
+          "docs": [],
+          "selected_doc": null,
+          "llm_prompt": "",
+          "llm_response": "1.  **Let's get this over with.** (빨리 끝내자)\n2.  **No pain, no gain.** (고통 없이 얻는 것은 없다)\n3.  **Break a leg!** (행운을 빌어!)\n4.  **Once in a blue moon.** (아주 드물게)\n5.  **Hit the nail on the head.** (정타를 맞추다)",
+          "process": "MP",
+          "retry_count": 0,
+          "next_step": null
+        }
       }
     ]
   }
