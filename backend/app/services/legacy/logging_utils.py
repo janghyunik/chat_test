@@ -11,6 +11,6 @@ def log_chat_history(question: str, answer: str, docs: list):
         writer.writerow([
             datetime.now().isoformat(),
             question,
-            answer[:500].replace("", " "),
-            "|".join([d.get("에러명", "") for d in docs]),
+            str(answer or "")[:500].replace("\n", " "),
+            "|".join([str(d.get("에러명", "")) for d in docs]),
         ])

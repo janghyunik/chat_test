@@ -341,7 +341,8 @@ def generate_final_answer(state: AgenticChatState) -> AgenticChatState:
 
     # ===== LLM 프롬프트 (고급 트러블슈팅 가이드) =====
     prompt = ENHANCED_TROUBLESHOOT_PROMPT.format(
-        equip=equip_raw, err=err_raw, document=doc_str, topn=len(use_docs)
+        query=state.get("user_question", ""),
+        document=doc_str,
     )
 
     try:
@@ -361,6 +362,60 @@ def generate_final_answer(state: AgenticChatState) -> AgenticChatState:
         print(f"[WARN] 로그 저장 실패: {log_err}")
 
     return state
+
+def retrieve_and_answer_direct(state: AgenticChatState) -> AgenticChatState:
+    """
+    기존의 1차 표 제시 → 번호 선택 흐름을 생략하고,
+    질문과 가장 유사한 상위 문서를 자동 선택(top-1)한 뒤 바로 2차 RAG 답변을 생성합니다.
+    """
+    print("\n[STEP] retrieve_and_answer_direct")
+    question = state.get("user_question", "")
+    process = (state.get("process") or "INFORM").upper()
+
+    try:
+        candidates = search_similar_documents(
+            user_query=question,
+            process=process,
+            top_k=TOP_K,
+        )
+    except Exception as e:
+        state["llm_response"] = f"❌ retrieval 오류: {e}"
+        state["current_step"] = "end"
+        return state
+
+    if not candidates:
+        state["llm_response"] = "관련 점검 이력을 찾지 못했습니다. 설비명, 호기, 에러명 등을 조금 더 구체적으로 입력해 주세요."
+        state["current_step"] = "end"
+        return state
+
+    state["docs"] = _dedup_preserve_order(candidates[:TOP_K])
+    state["selected_doc"] = state["docs"][0]
+    state["current_step"] = "generate_final_answer"
+    return generate_final_answer(state)
+
+
+def answer_question_direct(question: str, process: str) -> AgenticChatState:
+    state: AgenticChatState = {
+        "user_question": question,
+        "current_step": "classify_question",
+        "mode": "",
+        "metadata": {},
+        "meta_confirmed": None,
+        "user_message": question,
+        "docs": [],
+        "selected_doc": None,
+        "llm_prompt": "",
+        "llm_response": "",
+        "process": process,
+        "retry_count": 0,
+        "next_step": None,
+    }
+
+    state = classify_question(state)
+    if state.get("mode") == "inform":
+        return retrieve_and_answer_direct(state)
+    return handle_general(state)
+
 
 # ==================== 그래프 빌드 ====================
 def build_agentic_rag_graph():

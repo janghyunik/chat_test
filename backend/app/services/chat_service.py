@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from copy import deepcopy
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -8,11 +7,7 @@ from uuid import uuid4
 from fastapi import HTTPException, status
 
 from app.core.json_store import CHAT_STORE_PATH, load_json, save_json
-from app.services.legacy.agentic_rag_graph import (
-    agentic_rag_graph,
-    generate_final_answer,
-    handle_doc_confirm,
-)
+from app.services.legacy.agentic_rag_graph import answer_question_direct
 
 
 def _default_store() -> dict[str, Any]:
@@ -92,32 +87,12 @@ def _update_session(username: str, updated_session: dict[str, Any]) -> dict[str,
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="채팅 세션을 저장할 수 없습니다.")
 
 
-def _build_initial_agentic_state(question: str, process: str) -> dict[str, Any]:
-    return {
-        "user_question": question,
-        "current_step": "classify_question",
-        "mode": "",
-        "metadata": {},
-        "meta_confirmed": None,
-        "user_message": question,
-        "docs": [],
-        "selected_doc": None,
-        "llm_prompt": "",
-        "llm_response": "",
-        "process": process,
-        "retry_count": 0,
-        "next_step": None,
-    }
-
-
 def send_user_message(username: str, session_id: str, content: str) -> tuple[dict[str, Any], str]:
     if not content.strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="질문이 비어 있습니다.")
 
     session = get_session(username, session_id)
     process = session.get("process", "MP")
-    previous_state = deepcopy(session.get("agentic_state") or {})
-    current_step = str(previous_state.get("current_step") or "").strip()
 
     user_message = {
         "id": uuid4().hex,
@@ -127,15 +102,9 @@ def send_user_message(username: str, session_id: str, content: str) -> tuple[dic
     }
     session["messages"].append(user_message)
 
-    if current_step in ("wait_for_doc_choice", "wait_for_doc_confirm") and previous_state.get("docs"):
-        previous_state["user_message"] = content
-        previous_state["user_question"] = previous_state.get("user_question") or content
-        next_state = handle_doc_confirm(previous_state)
-        if next_state.get("current_step") == "generate_final_answer":
-            next_state = generate_final_answer(next_state)
-    else:
-        next_state = _build_initial_agentic_state(question=content, process=process)
-        next_state = agentic_rag_graph.invoke(next_state)
+    # 기존의 "표를 보여주고 번호를 다시 입력받는" 단계를 제거하고,
+    # 질문 즉시 유사 문서를 검색한 뒤 최종 답변까지 한 번에 생성합니다.
+    next_state = answer_question_direct(question=content, process=process)
 
     answer = next_state.get("llm_response", "답변을 생성하지 못했습니다.")
     assistant_message = {
