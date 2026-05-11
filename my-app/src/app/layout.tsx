@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { MonitoringClient } from "@/components/monitoring-client";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -9,7 +10,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ko">
-      <body>{children}</body>
+      <body>
+        <MonitoringClient />
+        {children}
+      </body>
     </html>
   );
 }

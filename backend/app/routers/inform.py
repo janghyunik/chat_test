@@ -16,6 +16,8 @@ def read_inform_records(
     period: str = Query(default=""),
     start: str = Query(default=""),
     end: str = Query(default=""),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
     current_user: SessionUser = Depends(get_current_user),
 ):
     _ = current_user
@@ -27,4 +29,6 @@ def read_inform_records(
         period=period,
         start=start,
         end=end,
+        page=page,
+        page_size=page_size,
     )

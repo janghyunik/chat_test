@@ -15,12 +15,13 @@ class ChatMessage(BaseModel):
 class ChatSessionSummary(BaseModel):
     id: str
     title: str
+    process: str = "MP"
+    reference_doc_count: int = 6
     created_at: datetime
     updated_at: datetime
 
 
 class ChatSessionDetail(ChatSessionSummary):
-    process: str = "MP"
     messages: List[ChatMessage] = Field(default_factory=list)
     agentic_state: dict[str, Any] = Field(default_factory=dict)
 
@@ -28,6 +29,7 @@ class ChatSessionDetail(ChatSessionSummary):
 class CreateChatSessionRequest(BaseModel):
     title: str | None = None
     process: str = "MP"
+    reference_doc_count: int | None = None
 
 
 class DeleteChatSessionResponse(BaseModel):
@@ -37,6 +39,11 @@ class DeleteChatSessionResponse(BaseModel):
 
 class SendMessageRequest(BaseModel):
     content: str
+    reference_doc_count: int | None = None
+
+
+class UpdateReferenceDocCountRequest(BaseModel):
+    reference_doc_count: int
 
 
 class SendMessageResponse(BaseModel):
