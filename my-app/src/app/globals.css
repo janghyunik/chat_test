@@ -1309,3 +1309,155 @@ button {
     justify-content: space-between;
   }
 }
+
+
+/* Phase24: ChatGPT-style compact progress status */
+.assistant-progress-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.assistant-progress-spinner {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--text);
+  opacity: 0.72;
+  box-shadow: 0 0 0 0 rgba(17, 17, 17, 0.18);
+  animation: processPulse 1.2s ease-in-out infinite;
+  flex: 0 0 auto;
+}
+
+.process-disclosure {
+  margin-top: 12px;
+}
+
+.process-disclosure-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 800;
+  padding: 6px 2px;
+  cursor: pointer;
+}
+
+.process-disclosure-button:hover {
+  color: var(--text);
+}
+
+.process-disclosure-icon {
+  display: inline-block;
+  font-size: 18px;
+  line-height: 1;
+  transform: translateY(-1px) rotate(0deg);
+  transition: transform 0.18s ease;
+}
+
+.process-disclosure-icon.open {
+  transform: translateY(-1px) rotate(180deg);
+}
+
+.assistant-thinking-shell .process-disclosure {
+  margin-top: 2px;
+}
+
+.streaming-answer-shell .process-disclosure {
+  margin-top: 6px;
+}
+
+.streaming-answer-shell .assistant-progress-summary {
+  margin-bottom: 2px;
+}
+
+/* Phase23: streaming process timeline */
+.process-timeline {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-soft);
+}
+
+.process-step {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--text-soft);
+}
+
+.process-dot {
+  width: 9px;
+  height: 9px;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: var(--text-soft);
+  opacity: 0.55;
+  box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.04);
+}
+
+.process-step.running .process-dot {
+  background: var(--text);
+  opacity: 1;
+  animation: processPulse 1.15s ease-in-out infinite;
+}
+
+.process-step.done .process-dot {
+  background: #1f8a4c;
+  opacity: 1;
+}
+
+.process-step.warning .process-dot {
+  background: #b7791f;
+  opacity: 1;
+}
+
+.process-step-body {
+  display: grid;
+  gap: 2px;
+}
+
+.process-label {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.process-detail {
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+@keyframes processPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(17, 17, 17, 0.16);
+  }
+  70% {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 7px rgba(17, 17, 17, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(17, 17, 17, 0);
+  }
+}

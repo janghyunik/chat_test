@@ -224,6 +224,28 @@ def stream_user_message_events(owner_id: str, session_id: str, content: str, ref
             if not chunk:
                 continue
 
+            if isinstance(chunk, dict):
+                event_type = chunk.get("event")
+                if event_type == "process":
+                    yield _to_ndjson({
+                        "type": "process",
+                        "stage": chunk.get("stage", "process"),
+                        "label": chunk.get("label", "처리 중"),
+                        "detail": chunk.get("detail", ""),
+                        "status": chunk.get("status", "running"),
+                        "meta": chunk.get("meta", {}),
+                    })
+                    continue
+                if event_type == "delta":
+                    chunk = str(chunk.get("content", ""))
+                else:
+                    continue
+
+            if not isinstance(chunk, str):
+                chunk = str(chunk)
+            if not chunk:
+                continue
+
             if first_token_ms is None:
                 first_token_ms = round((perf_counter() - started) * 1000, 2)
             full_answer_parts.append(chunk)

@@ -11,6 +11,7 @@ from app.routers.auth import router as auth_router
 from app.routers.chat import router as chat_router
 from app.routers.inform import router as inform_router
 from app.routers.monitoring import router as monitoring_router
+from app.routers.alert import router as alert_router
 from app.services.chat_pg_store import init_chat_pg_tables, migrate_json_store_if_needed
 from app.services.monitoring_store import init_monitoring_tables, insert_event
 
@@ -84,6 +85,7 @@ app.include_router(auth_router)
 app.include_router(chat_router)
 app.include_router(inform_router)
 app.include_router(monitoring_router)
+app.include_router(alert_router)
 
 
 @app.get("/api/health")
