@@ -1,6 +1,7 @@
 import os
 import re
 from typing import Any, Iterable
+from datetime import datetime
 
 import ollama
 import psycopg2
@@ -725,3 +726,225 @@ def hybrid_search_similar_documents_legacy(error_name: str, process: str, line: 
         line=line,
         equip=equip,
     )
+
+# -----------------------------------------------------------------------------
+# Alert-specific retrieval
+# -----------------------------------------------------------------------------
+
+def _canonical_line_for_alert(line: Any) -> list[str]:
+    """Alert 입력 라인 값을 DB 라인 컬럼 후보로 확장합니다."""
+    raw = str(line or "").strip()
+    if not raw:
+        return []
+    return _line_aliases(raw)
+
+
+def _equipment_model_for_alert(equipment: Any) -> str:
+    raw = str(equipment or "").strip().upper()
+    m = re.match(r"^([A-Z0-9]+)", raw)
+    return m.group(1) if m else ""
+
+
+def _alert_error_terms(error_name: str) -> list[str]:
+    tokens = _tokenize(error_name)
+    codes = re.findall(r"\b[A-Za-z]+\d{2,}[A-Za-z0-9]*\b|\b\d{2,}\b", str(error_name or ""), flags=re.IGNORECASE)
+    ngrams = _build_ngram_terms(tokens, min_n=2, max_n=4, limit=18)
+    keywords = [kw for kw in extract_query_keywords(error_name, limit=16) if kw not in KEYWORD_STOPWORDS]
+    return _unique([str(error_name or "").strip(), *codes, *ngrams, *keywords], limit=28)
+
+
+def search_alert_precision_documents(
+    *,
+    line: str,
+    equipment: str,
+    error_name: str,
+    process: str = "MP",
+    top_k: int = 10,
+    include_model_expansion: bool = True,
+) -> list[dict[str, Any]]:
+    """설비 에러 알림용 정밀 검색입니다.
+
+    일반 채팅 질문과 달리 alert 입력은 line/equipment/error_name이 구조화되어 있습니다.
+    따라서 line/equipment는 embedding이 아니라 SQL 컬럼 조건과 문자열 매칭으로 강하게 고정하고,
+    error_name에 대해서만 keyword + 기존 full embedding 검색을 보조로 사용합니다.
+
+    검색 단계:
+    1. 동일 라인 + 동일 설비 후보를 우선 조회하고, 그 안에서 error_name/점검이력 매칭과 최신성을 반영합니다.
+    2. 같은 설비의 최근 이력을 보강합니다.
+    3. 결과가 부족하면 동일 모델 + error term 후보를 보강합니다.
+    4. error_name만 embedding 검색하여 오타/축약 표현을 보완합니다.
+    """
+    table_name = _get_table_name(process)
+    line_aliases = _canonical_line_for_alert(line)
+    equip_raw = str(equipment or "").strip()
+    equip_norm = _norm(equip_raw)
+    model = _equipment_model_for_alert(equip_raw)
+    error_terms = _alert_error_terms(error_name)
+    error_norm = _norm(error_name)
+
+    # line/equipment 조건은 SQL에서 강한 점수로 반영합니다. 단, 실제 DB 표기가 약간 다를 수 있어
+    # WHERE 자체는 너무 좁히지 않고 점수 기반 정렬로 처리합니다.
+    score_exprs: list[str] = []
+    score_params: list[Any] = []
+    match_exprs: list[str] = []
+    match_params: list[Any] = []
+
+    def add_score(expr: str, params: list[Any]) -> None:
+        score_exprs.append(expr)
+        score_params.extend(params)
+
+    def add_match(expr: str, params: list[Any]) -> None:
+        match_exprs.append(expr)
+        match_params.extend(params)
+
+    if line_aliases:
+        add_score("CASE WHEN 라인 = ANY(%s) THEN 520 ELSE 0 END", [line_aliases])
+        # 설비명 안의 2L/4L 코드도 보조로 반영합니다.
+        for la in line_aliases[:8]:
+            add_score("CASE WHEN 설비명 ILIKE %s THEN 90 ELSE 0 END", [f"%{la}%"])
+        add_match("라인 = ANY(%s)", [line_aliases])
+
+    if equip_raw:
+        add_score("CASE WHEN 설비명 = %s THEN 760 ELSE 0 END", [equip_raw])
+        add_score("CASE WHEN REPLACE(LOWER(설비명), '-', '') = %s THEN 720 ELSE 0 END", [equip_norm])
+        add_score("CASE WHEN 설비명 ILIKE %s THEN 560 ELSE 0 END", [f"%{equip_raw}%"])
+        add_match("(설비명 = %s OR REPLACE(LOWER(설비명), '-', '') = %s OR 설비명 ILIKE %s)", [equip_raw, equip_norm, f"%{equip_raw}%"])
+
+    if model:
+        add_score("CASE WHEN 설비명 ILIKE %s THEN 110 ELSE 0 END", [f"{model}%"])
+        if include_model_expansion:
+            add_match("설비명 ILIKE %s", [f"{model}%"])
+
+    for term in error_terms:
+        t_norm = _norm(term)
+        if not t_norm:
+            continue
+        is_code = bool(re.fullmatch(r"x?\d{3,}[a-z0-9]*", t_norm)) or t_norm.isdigit()
+        is_phrase = " " in str(term).strip() or len(t_norm) >= 5
+        ew = 520 if is_code else (380 if is_phrase else 230)
+        add_score("CASE WHEN 에러명 ILIKE %s THEN %s ELSE 0 END", [f"%{term}%", ew])
+        add_score("CASE WHEN 점검이력 ILIKE %s THEN %s ELSE 0 END", [f"%{term}%", 180 if is_code else 95])
+        add_score("CASE WHEN text ILIKE %s THEN %s ELSE 0 END", [f"%{term}%", 120 if is_code else 70])
+        add_match("(에러명 ILIKE %s OR 점검이력 ILIKE %s OR text ILIKE %s)", [f"%{term}%", f"%{term}%", f"%{term}%"])
+
+    if error_norm:
+        add_score("CASE WHEN REPLACE(LOWER(에러명), ' ', '') ILIKE %s THEN 440 ELSE 0 END", [f"%{error_norm}%"])
+
+    if not match_exprs:
+        return []
+
+    score_expr = " + ".join(score_exprs) if score_exprs else "0"
+    where_clause = " OR ".join(match_exprs)
+    limit = max(top_k * 5, 50)
+
+    with psycopg2.connect(PG_CONN_STR) as conn:
+        with conn.cursor() as cur:
+            sql = f"""
+            SELECT id, text, 날짜, 라인, 공정, 설비명, 에러명, 점검이력, source,
+                   ({score_expr}) AS alert_score,
+                   CASE
+                     WHEN 라인 = ANY(%s) AND (설비명 = %s OR REPLACE(LOWER(설비명), '-', '') = %s) THEN '동일 라인 + 동일 설비'
+                     WHEN (설비명 = %s OR REPLACE(LOWER(설비명), '-', '') = %s OR 설비명 ILIKE %s) THEN '동일 설비'
+                     WHEN 설비명 ILIKE %s THEN '동일 모델'
+                     ELSE '유사 이력'
+                   END AS match_level
+            FROM {table_name}
+            WHERE ({where_clause})
+            ORDER BY alert_score DESC, 날짜 DESC
+            LIMIT %s
+            """
+            cur.execute(
+                sql,
+                score_params
+                + [line_aliases or [str(line or "")], equip_raw, equip_norm, equip_raw, equip_norm, f"%{equip_raw}%", f"{model}%"]
+                + match_params
+                + [limit],
+            )
+            rows = cur.fetchall()
+
+    results: list[dict[str, Any]] = []
+    for row in rows:
+        doc = _base_result(row)
+        doc["alert_score"] = float(row[9] or 0.0)
+        doc["structured_score"] = max(float(doc.get("structured_score", 0.0) or 0.0), float(row[9] or 0.0))
+        doc["match_level"] = row[10]
+        doc["retrieval_channels"] = ["alert-column"]
+        doc["query_hits"] = [f"{line} {equipment} {error_name}".strip()]
+        results.append(doc)
+
+    # error_name embedding 보강: line/equipment는 exact filter가 맞으면 우선 적용합니다.
+    dense_docs: list[dict[str, Any]] = []
+    try:
+        dense_docs = search_similar_documents(
+            user_query=error_name,
+            process=process,
+            top_k=max(top_k, 10),
+            line=(line_aliases[0] if line_aliases else ""),
+            equip=equip_raw,
+        )
+    except Exception as error:
+        print(f"[WARN] alert dense retrieval with line/equip filter failed: {error}")
+        try:
+            dense_docs = search_similar_documents(
+                user_query=error_name,
+                process=process,
+                top_k=max(top_k, 10),
+            )
+        except Exception as dense_error:
+            print(f"[WARN] alert dense retrieval failed: {dense_error}")
+            dense_docs = []
+
+    merged: dict[tuple[Any, ...], dict[str, Any]] = {}
+    for doc in results:
+        merged[_doc_key(doc)] = doc
+
+    for doc in dense_docs:
+        key = _doc_key(doc)
+        if key in merged:
+            existing = merged[key]
+            existing["similarity"] = doc.get("similarity")
+            channels = list(existing.get("retrieval_channels", []) or [])
+            if "alert-dense-error" not in channels:
+                channels.append("alert-dense-error")
+            existing["retrieval_channels"] = channels
+        else:
+            doc = dict(doc)
+            doc["alert_score"] = float(doc.get("alert_score", 0.0) or 0.0) + 120.0
+            doc["match_level"] = "에러명 유사"
+            doc["retrieval_channels"] = ["alert-dense-error"]
+            merged[key] = doc
+
+    final_docs = list(merged.values())
+
+    def date_key(doc: dict[str, Any]) -> datetime:
+        val = doc.get("날짜")
+        if isinstance(val, datetime):
+            return val
+        try:
+            return datetime.fromisoformat(str(val)[:19])
+        except Exception:
+            return datetime.min
+
+    def final_score(doc: dict[str, Any]) -> float:
+        score = float(doc.get("alert_score", 0.0) or 0.0)
+        if doc.get("similarity") is not None:
+            score += max(0.0, 150.0 * (1.0 - float(doc.get("similarity") or 1.0)))
+        level = str(doc.get("match_level") or "")
+        if "동일 라인" in level:
+            score += 200
+        elif "동일 설비" in level:
+            score += 150
+        elif "동일 모델" in level:
+            score += 50
+        # 최신성 보정: 최근 날짜가 위로 오도록 약하게 보정합니다.
+        dt = date_key(doc)
+        if dt != datetime.min:
+            age_days = max(0, (datetime.now() - dt).days)
+            score += max(0, 80 - min(age_days, 365) / 365 * 80)
+        return score
+
+    for doc in final_docs:
+        doc["final_score"] = final_score(doc)
+
+    final_docs.sort(key=lambda d: (float(d.get("final_score", 0.0) or 0.0), date_key(d)), reverse=True)
+    return final_docs[: max(top_k, 1)]
